@@ -68,8 +68,9 @@ class LeanixAdmin:
                 self._upload_model(name, api_path, force)
 
     def _print_workspace(self):
-        # parse the payload section from the JWT token.
-        payload = json.loads(base64.urlsafe_b64decode(self.auth.obtain_access_token().split('.')[1]))
+        jwt = self.auth.obtain_access_token()
+        payload_part = jwt.split('.')[1]
+        payload = json.loads(base64.b64decode(payload_part))
         workspace_id = payload['principal']['permission']['workspaceId']
         response = self.http.get(self.mtm_base_url + '/workspaces/' + workspace_id)
         response.raise_for_status()
