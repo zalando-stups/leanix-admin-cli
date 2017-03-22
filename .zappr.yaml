@@ -1,0 +1,9 @@
+X-Zalando-Team: "torch"
+
+approvals:
+  groups:
+    zalando:
+      minimum: 2
+      from:
+        orgs:
+          - "zalando"
