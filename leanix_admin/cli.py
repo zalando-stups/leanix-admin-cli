@@ -74,7 +74,7 @@ class LeanixAdmin:
         # If number of bytes is not dividable by 4, append '=' until it is.
         missing_padding = len(payload_part) % 4
         if missing_padding != 0:
-            payload_part += b'='* (4 - missing_padding)
+            payload_part += '='* (4 - missing_padding)
         payload = json.loads(base64.b64decode(payload_part))
         workspace_id = payload['principal']['permission']['workspaceId']
         response = self.http.get(self.mtm_base_url + '/workspaces/' + workspace_id)
