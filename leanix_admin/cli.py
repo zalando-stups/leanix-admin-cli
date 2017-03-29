@@ -9,6 +9,12 @@ import requests.auth as requests_auth
 import leanix_admin.graphql as graphql
 
 
+def find_by_name_in(needle, haystack):
+    for current in haystack:
+        if needle['name'] == current['name']:
+            return current
+    return None
+
 def obtain_access_token(api_token, mtm_base_url):
     response = requests.post(mtm_base_url + '/oauth2/token',
                              data={'grant_type': 'client_credentials'},
@@ -60,13 +66,13 @@ class LeanixAdmin:
         self._print_workspace()
         if click.confirm('Continue restoring backups?', default=True):
             self._restore_models()
-            self._restore_tags()
+            self._restore_tag_groups()
 
     def backup(self):
         self._print_workspace()
         if click.confirm('Continue downloading backups?', default=True):
             self._backup_models()
-            self._backup_tags()
+            self._backup_tag_groups()
 
     def _print_workspace(self):
         jwt = self.auth.obtain_access_token()
@@ -103,79 +109,142 @@ class LeanixAdmin:
                 pass
             raise
 
-    def _restore_tags(self):
+    def _restore_tag_groups(self):
         print('Restoring tag groups...')
         current_tag_groups = self._fetch_tag_groups(erase_id=False)
         desired_tag_groups = self._read_from_disk('tag-groups')
 
-        def find_tag_group_in(needle, haystack):
-            for tag_group in haystack:
-                if needle['name'] == tag_group['name']:
-                    return tag_group
-            return None
-
-        to_be_created = []
-        to_be_updated = []
-        to_be_deleted = []
-
         for desired_tag_group in desired_tag_groups:
-            current_tag_group = find_tag_group_in(desired_tag_group, current_tag_groups)
+            current_tag_group = find_by_name_in(desired_tag_group, current_tag_groups)
             if current_tag_group:
                 desired_tag_group['id'] = current_tag_group['id']
-                to_be_updated.append(desired_tag_group)
+                self._update_tag_group(desired_tag_group)
+                current_tags = current_tag_group.get('tags', [])
             else:
-                to_be_created.append(desired_tag_group)
+                self._create_tag_group(desired_tag_group)
+                current_tags = []
+            self._restore_tags(desired_tag_group['id'], desired_tag_group.get('tags', []), current_tags)
 
         for current_tag_group in current_tag_groups:
-            if not find_tag_group_in(current_tag_group, desired_tag_groups):
-                to_be_deleted.append(current_tag_group)
+            if not find_by_name_in(current_tag_group, desired_tag_groups):
+                for tag in current_tag_group.get('tags', []):
+                    self._delete_tag(tag)
+                self._delete_tag_group(current_tag_group)
 
-        for tag_group in to_be_created:
-            body = {'operationName': None,
-                    'query': graphql.create_tag_group,
-                    'variables': tag_group}
-            r = self.http.post(self.admin_base_url + '/graphql', json=body)
-            r.raise_for_status()
-            r_body = r.json()
-            errors = r_body['errors']
-            if errors:
-                print(errors)
-                raise Exception()
-            tag_group['id'] = r_body['data']['createTagGroup']['id']
+    def _create_tag_group(self, tag_group):
+        body = {'operationName': None,
+                'query': graphql.create_tag_group,
+                'variables': tag_group}
+        r = self.http.post(self.admin_base_url + '/graphql', json=body)
+        r.raise_for_status()
+        r_body = r.json()
+        errors = r_body['errors']
+        if errors:
+            print(errors)
+            print('Request: ', body)
+            raise Exception()
+        tag_group['id'] = r_body['data']['createTagGroup']['id']
 
+    def _update_tag_group(self, tag_group):
         def tag_group_patches(tag_group):
+            short_name = tag_group['shortName']
+            description = tag_group['description']
             return [
                 {'op': 'replace', 'path': '/mode', 'value': tag_group['mode']},
                 {'op': 'replace', 'path': '/restrictToFactSheetTypes',
                  'value': json.dumps(tag_group['restrictToFactSheetTypes'])},
-                {'op': 'replace', 'path': '/shortName', 'value': tag_group['shortName']},
-                {'op': 'replace', 'path': '/description', 'value': tag_group['description']}
+                ({'op': 'replace', 'path': '/shortName', 'value': short_name} if short_name else {'op': 'remove', 'path': '/shortName'}),
+                ({'op': 'replace', 'path': '/description', 'value': description} if description else {'op': 'remove', 'path': '/description'})
             ]
 
-        for tag_group in to_be_updated:
-            body = {'operationName': None,
-                    'query': graphql.update_tag_group,
-                    'variables': {'id': tag_group['id'],
-                                  'patches': tag_group_patches(tag_group)}}
-            r = self.http.post(self.admin_base_url + '/graphql', json=body)
-            r.raise_for_status()
-            r_body = r.json()
-            errors = r_body['errors']
-            if errors:
-                print(errors)
-                raise Exception()
+        body = {'operationName': None,
+                'query': graphql.update_tag_group,
+                'variables': {'id': tag_group['id'],
+                              'patches': tag_group_patches(tag_group)}}
+        r = self.http.post(self.admin_base_url + '/graphql', json=body)
+        r.raise_for_status()
+        r_body = r.json()
+        errors = r_body['errors']
+        if errors:
+            print(errors)
+            print('Request: ', body)
+            raise Exception()
 
-        for tag_group in to_be_deleted:
-            body = {'operationName': None,
-                    'query': graphql.delete_tag_group,
-                    'variables': {'id': tag_group['id']}}
-            r = self.http.post(self.admin_base_url + '/graphql', json=body)
-            r.raise_for_status()
-            r_body = r.json()
-            errors = r_body['errors']
-            if errors:
-                print(errors)
-                raise Exception()
+    def _delete_tag_group(self, tag_group):
+        body = {'operationName': None,
+                'query': graphql.delete_tag_group,
+                'variables': {'id': tag_group['id']}}
+        r = self.http.post(self.admin_base_url + '/graphql', json=body)
+        r.raise_for_status()
+        r_body = r.json()
+        errors = r_body['errors']
+        if errors:
+            print(errors)
+            print('Request: ', body)
+            raise Exception()
+
+    def _restore_tags(self, tag_group_id, desired_tags, current_tags):
+        for desired_tag in desired_tags:
+            current_tag = find_by_name_in(desired_tag, current_tags)
+            if current_tag:
+                desired_tag['id'] = current_tag['id']
+                self._update_tag(desired_tag)
+            else:
+                desired_tag['tagGroupId'] = tag_group_id
+                self._create_tag(desired_tag)
+
+        for current_tag in current_tags:
+            if not find_by_name_in(current_tag, desired_tags):
+                self._delete_tag(current_tag)
+
+    def _create_tag(self, tag):
+        body = {'operationName': None,
+                'query': graphql.create_tag,
+                'variables': tag}
+        r = self.http.post(self.admin_base_url + '/graphql', json=body)
+        r.raise_for_status()
+        r_body = r.json()
+        errors = r_body['errors']
+        if errors:
+            print(errors)
+            print('Request: ', body)
+            raise Exception()
+        tag['id'] = r_body['data']['createTag']['id']
+
+    def _update_tag(self, tag):
+        def tag_patches(tag):
+            description = tag['description']
+            return [
+                ({'op': 'replace', 'path': '/description', 'value': description} if description else {'op': 'remove', 'path': '/description'}),
+                {'op': 'replace', 'path': '/color', 'value': tag['color']},
+                {'op': 'replace', 'path': '/status', 'value': tag['status']}
+            ]
+
+        body = {'operationName': None,
+                'query': graphql.update_tag,
+                'variables': {'id': tag['id'],
+                              'patches': tag_patches(tag)}}
+        r = self.http.post(self.admin_base_url + '/graphql', json=body)
+        r.raise_for_status()
+        r_body = r.json()
+        errors = r_body['errors']
+        if errors:
+            print(errors)
+            print('Request: ', body)
+            raise Exception()
+
+    def _delete_tag(self, tag):
+        body = {'operationName': None,
+                'query': graphql.delete_tag,
+                'variables': {'id': tag['id']}}
+        r = self.http.post(self.admin_base_url + '/graphql', json=body)
+        r.raise_for_status()
+        r_body = r.json()
+        errors = r_body['errors']
+        if errors:
+            print(errors)
+            print('Request: ', body)
+            raise Exception()
 
     def _backup_models(self):
         for name, api_path in self.models.items():
@@ -192,7 +261,7 @@ class LeanixAdmin:
         model_data = response.json()['data']
         self._write_to_disk(name, model_data)
 
-    def _backup_tags(self):
+    def _backup_tag_groups(self):
         print('Backing up tag groups...')
         tag_groups = self._fetch_tag_groups()
         self._write_to_disk('tag-groups', tag_groups)
