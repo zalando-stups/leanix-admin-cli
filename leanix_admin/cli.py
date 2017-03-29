@@ -1,4 +1,3 @@
-import base64
 import json
 
 import click
@@ -24,54 +23,39 @@ models = {
     'lang-en-model': '/models/languages/en'
 }
 
-
 class LeanixAdmin:
 
     def __init__(self, api_token, mtm_base_url, admin_base_url, force=False):
-        self.mtm_base_url = mtm_base_url
         self.admin_base_url = admin_base_url
         self.force = force
         self.auth = auth.LeanixAuth(api_token, mtm_base_url + '/oauth2/token')
         self.http = requests.session()
         self.http.auth = self.auth
 
+        workspace_logger = auth.WorkspaceLogger(self.http, mtm_base_url)
+
         self.restore_actions = []
+        self.restore_actions.append(workspace_logger)
         for name, api_path in models.items():
             self.restore_actions.append(model.ModelRestoreAction(self.http, admin_base_url + api_path, name, force))
 
         self.backup_actions = []
+        self.backup_actions.append(workspace_logger)
         for name, api_path in models.items():
             self.backup_actions.append(model.ModelBackupAction(self.http, admin_base_url + api_path, name))
 
 
     def restore(self):
-        self._print_workspace()
         for action in self.restore_actions:
             action.perform()
         if click.confirm('Continue restoring backups?', default=True):
             self._restore_tag_groups()
 
     def backup(self):
-        self._print_workspace()
         for action in self.backup_actions:
             action.perform()
         if click.confirm('Continue downloading backups?', default=True):
             self._backup_tag_groups()
-
-    def _print_workspace(self):
-        jwt = self.auth.obtain_access_token()
-        payload_part = jwt.split('.')[1]
-        # fix missing padding for this base64 encoded string.
-        # If number of bytes is not dividable by 4, append '=' until it is.
-        missing_padding = len(payload_part) % 4
-        if missing_padding != 0:
-            payload_part += '='* (4 - missing_padding)
-        payload = json.loads(base64.b64decode(payload_part))
-        workspace_id = payload['principal']['permission']['workspaceId']
-        response = self.http.get(self.mtm_base_url + '/workspaces/' + workspace_id)
-        response.raise_for_status()
-        workspace_name = response.json()['data']['name']
-        print('Logged in to workspace:', workspace_name)
 
     def _restore_tag_groups(self):
         print('Restoring tag groups...')
