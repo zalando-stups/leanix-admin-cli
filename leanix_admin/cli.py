@@ -4,46 +4,16 @@ import json
 import click
 import os
 import requests
-import requests.auth as requests_auth
 
+import leanix_admin.auth as auth
 import leanix_admin.graphql as graphql
 
 
-def find_by_name_in(needle, haystack):
+def find_by_name(needle, haystack):
     for current in haystack:
         if needle['name'] == current['name']:
             return current
     return None
-
-def obtain_access_token(api_token, mtm_base_url):
-    response = requests.post(mtm_base_url + '/oauth2/token',
-                             data={'grant_type': 'client_credentials'},
-                             auth=('apitoken', api_token))
-    response.raise_for_status()
-    return response.json()['access_token']
-
-
-class LeanixAuth(requests_auth.AuthBase):
-    def __init__(self, api_token, oauth_token_url):
-        self.oauth_token_url = oauth_token_url
-        self.api_token = api_token
-        self.access_token = None
-
-    def obtain_access_token(self):
-        if not self.access_token:
-            response = requests.post(self.oauth_token_url,
-                                     data={'grant_type': 'client_credentials'},
-                                     auth=('apitoken', self.api_token))
-            response.raise_for_status()
-            self.access_token = response.json()['access_token']
-        return self.access_token
-
-    def auth_header(self):
-        return 'Bearer ' + self.obtain_access_token()
-
-    def __call__(self, r):
-        r.headers['Authorization'] = self.auth_header()
-        return r
 
 
 class LeanixAdmin:
@@ -58,7 +28,7 @@ class LeanixAdmin:
         self.mtm_base_url = mtm_base_url
         self.admin_base_url = admin_base_url
         self.force = force
-        self.auth = LeanixAuth(api_token, mtm_base_url + '/oauth2/token')
+        self.auth = auth.LeanixAuth(api_token, mtm_base_url + '/oauth2/token')
         self.http = requests.session()
         self.http.auth = self.auth
 
@@ -115,7 +85,7 @@ class LeanixAdmin:
         desired_tag_groups = self._read_from_disk('tag-groups')
 
         for desired_tag_group in desired_tag_groups:
-            current_tag_group = find_by_name_in(desired_tag_group, current_tag_groups)
+            current_tag_group = find_by_name(desired_tag_group, current_tag_groups)
             if current_tag_group:
                 desired_tag_group['id'] = current_tag_group['id']
                 self._update_tag_group(desired_tag_group)
@@ -126,7 +96,7 @@ class LeanixAdmin:
             self._restore_tags(desired_tag_group['id'], desired_tag_group.get('tags', []), current_tags)
 
         for current_tag_group in current_tag_groups:
-            if not find_by_name_in(current_tag_group, desired_tag_groups):
+            if not find_by_name(current_tag_group, desired_tag_groups):
                 for tag in current_tag_group.get('tags', []):
                     self._delete_tag(tag)
                 self._delete_tag_group(current_tag_group)
@@ -146,13 +116,13 @@ class LeanixAdmin:
         tag_group['id'] = r_body['data']['createTagGroup']['id']
 
     def _update_tag_group(self, tag_group):
-        def tag_group_patches(tag_group):
-            short_name = tag_group['shortName']
-            description = tag_group['description']
+        def tag_group_patches(tg):
+            short_name = tg['shortName']
+            description = tg['description']
             return [
-                {'op': 'replace', 'path': '/mode', 'value': tag_group['mode']},
+                {'op': 'replace', 'path': '/mode', 'value': tg['mode']},
                 {'op': 'replace', 'path': '/restrictToFactSheetTypes',
-                 'value': json.dumps(tag_group['restrictToFactSheetTypes'])},
+                 'value': json.dumps(tg['restrictToFactSheetTypes'])},
                 ({'op': 'replace', 'path': '/shortName', 'value': short_name} if short_name else {'op': 'remove', 'path': '/shortName'}),
                 ({'op': 'replace', 'path': '/description', 'value': description} if description else {'op': 'remove', 'path': '/description'})
             ]
@@ -185,7 +155,7 @@ class LeanixAdmin:
 
     def _restore_tags(self, tag_group_id, desired_tags, current_tags):
         for desired_tag in desired_tags:
-            current_tag = find_by_name_in(desired_tag, current_tags)
+            current_tag = find_by_name(desired_tag, current_tags)
             if current_tag:
                 desired_tag['id'] = current_tag['id']
                 self._update_tag(desired_tag)
@@ -194,7 +164,7 @@ class LeanixAdmin:
                 self._create_tag(desired_tag)
 
         for current_tag in current_tags:
-            if not find_by_name_in(current_tag, desired_tags):
+            if not find_by_name(current_tag, desired_tags):
                 self._delete_tag(current_tag)
 
     def _create_tag(self, tag):
@@ -212,12 +182,13 @@ class LeanixAdmin:
         tag['id'] = r_body['data']['createTag']['id']
 
     def _update_tag(self, tag):
-        def tag_patches(tag):
-            description = tag['description']
+        def tag_patches(t):
+            description = t['description']
             return [
-                ({'op': 'replace', 'path': '/description', 'value': description} if description else {'op': 'remove', 'path': '/description'}),
-                {'op': 'replace', 'path': '/color', 'value': tag['color']},
-                {'op': 'replace', 'path': '/status', 'value': tag['status']}
+                ({'op': 'replace', 'path': '/description', 'value': description} if description else {'op': 'remove',
+                                                                                                      'path': '/description'}),
+                {'op': 'replace', 'path': '/color', 'value': t['color']},
+                {'op': 'replace', 'path': '/status', 'value': t['status']}
             ]
 
         body = {'operationName': None,
@@ -293,12 +264,14 @@ class LeanixAdmin:
             tag_groups.append(tag_group)
         return tag_groups
 
-    def _read_from_disk(self, name):
+    @staticmethod
+    def _read_from_disk(name):
         file_name = './' + name + '.json'
         with open(file_name, 'r') as f:
             return json.load(f)
 
-    def _write_to_disk(self, name, data):
+    @staticmethod
+    def _write_to_disk(name, data):
         file_name = './' + name + '.json'
         os.makedirs(os.path.dirname(file_name), exist_ok=True)
         with open(file_name, 'w') as f:
