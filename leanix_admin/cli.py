@@ -7,6 +7,7 @@ import requests
 
 import leanix_admin.auth as auth
 import leanix_admin.graphql as graphql
+import leanix_admin.model as model
 
 
 def find_by_name(needle, haystack):
@@ -16,13 +17,15 @@ def find_by_name(needle, haystack):
     return None
 
 
+models = {
+    'data-model': '/models/dataModel',
+    'view-model': '/models/viewModel',
+    'auth-model': '/models/authorization',
+    'lang-en-model': '/models/languages/en'
+}
+
+
 class LeanixAdmin:
-    models = {
-        'data-model': '/models/dataModel',
-        'view-model': '/models/viewModel',
-        'auth-model': '/models/authorization',
-        'lang-en-model': '/models/languages/en'
-    }
 
     def __init__(self, api_token, mtm_base_url, admin_base_url, force=False):
         self.mtm_base_url = mtm_base_url
@@ -32,16 +35,27 @@ class LeanixAdmin:
         self.http = requests.session()
         self.http.auth = self.auth
 
+        self.restore_actions = []
+        for name, api_path in models.items():
+            self.restore_actions.append(model.ModelRestoreAction(self.http, admin_base_url + api_path, name, force))
+
+        self.backup_actions = []
+        for name, api_path in models.items():
+            self.backup_actions.append(model.ModelBackupAction(self.http, admin_base_url + api_path, name))
+
+
     def restore(self):
         self._print_workspace()
+        for action in self.restore_actions:
+            action.perform()
         if click.confirm('Continue restoring backups?', default=True):
-            self._restore_models()
             self._restore_tag_groups()
 
     def backup(self):
         self._print_workspace()
+        for action in self.backup_actions:
+            action.perform()
         if click.confirm('Continue downloading backups?', default=True):
-            self._backup_models()
             self._backup_tag_groups()
 
     def _print_workspace(self):
@@ -58,26 +72,6 @@ class LeanixAdmin:
         response.raise_for_status()
         workspace_name = response.json()['data']['name']
         print('Logged in to workspace:', workspace_name)
-
-    def _restore_models(self):
-        for name, api_path in self.models.items():
-            print('Restoring {}...'.format(name))
-            self._upload_model(name, api_path)
-
-    def _upload_model(self, name, api_path):
-        data_model = self._read_from_disk(name)
-        url = self.admin_base_url + api_path
-        if self.force:
-            url += "?force=true"
-        response = self.http.put(url, json=data_model)
-        try:
-            response.raise_for_status()
-        except:
-            try:
-                print(response.json())
-            except ValueError:
-                pass
-            raise
 
     def _restore_tag_groups(self):
         print('Restoring tag groups...')
@@ -216,21 +210,6 @@ class LeanixAdmin:
             print(errors)
             print('Request: ', body)
             raise Exception()
-
-    def _backup_models(self):
-        for name, api_path in self.models.items():
-            print('Backing up {}...'.format(name))
-            self._download_model(name, api_path)
-
-    def _download_model(self, name, api_path):
-        response = self.http.get(self.admin_base_url + api_path)
-        try:
-            response.raise_for_status()
-        except:
-            print(response.json())
-            raise
-        model_data = response.json()['data']
-        self._write_to_disk(name, model_data)
 
     def _backup_tag_groups(self):
         print('Backing up tag groups...')
