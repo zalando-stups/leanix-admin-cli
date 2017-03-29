@@ -18,18 +18,9 @@ class TagGroupsBase:
         self.graphql_url = graphql_url
 
     def _fetch_tag_groups(self, erase_id=True):
-        body = {'operationName': None,
-                'query': graphql.list_tag_groups,
-                'variables': {}}
-        r = self.http.post(self.graphql_url, json=body)
-        r.raise_for_status()
-        r_body = r.json()
-        errors = r_body['errors']
-        if errors:
-            print(errors)
-            raise Exception()
+        response = self._exec_graphql(graphql.list_tag_groups)
         tag_groups = []
-        for tag_group_edge in r_body.get('data', {}).get('listTagGroups', {}).get('edges', []):
+        for tag_group_edge in response.get('listTagGroups', {}).get('edges', []):
             tag_group = tag_group_edge['node']
             tags = []
             for tag_edge in tag_group.get('tags', {}).get('edges', []):
@@ -43,6 +34,26 @@ class TagGroupsBase:
                 del tag_group['id']
             tag_groups.append(tag_group)
         return tag_groups
+
+    def _exec_graphql(self, query, variables=None):
+        if variables is None:
+            variables = {}
+        body = {'operationName': None,
+                'query': query,
+                'variables': variables}
+        r = self.http.post(self.graphql_url, json=body)
+        r.raise_for_status()
+        r_body = r.json()
+        errors = r_body.get('errors', None)
+        if errors:
+            print(errors)
+            print('Request: ', body)
+            raise Exception()
+        data = r_body.get('data', None)
+        if not data:
+            print('Request: ', body)
+            raise Exception('Empty response data')
+        return data
 
 
 class TagGroupsBackupAction(TagGroupsBase, BackupAction):
@@ -86,18 +97,8 @@ class TagGroupsRestoreAction(TagGroupsBase, RestoreAction):
                 self._delete_tag_group(current_tag_group)
 
     def _create_tag_group(self, tag_group):
-        body = {'operationName': None,
-                'query': graphql.create_tag_group,
-                'variables': tag_group}
-        r = self.http.post(self.graphql_url, json=body)
-        r.raise_for_status()
-        r_body = r.json()
-        errors = r_body['errors']
-        if errors:
-            print(errors)
-            print('Request: ', body)
-            raise Exception()
-        tag_group['id'] = r_body['data']['createTagGroup']['id']
+        response = self._exec_graphql(graphql.create_tag_group, tag_group)
+        tag_group['id'] = response['createTagGroup']['id']
 
     def _update_tag_group(self, tag_group):
         def tag_group_patches(tg):
@@ -113,31 +114,10 @@ class TagGroupsRestoreAction(TagGroupsBase, RestoreAction):
                                                                                                       'path': '/description'})
             ]
 
-        body = {'operationName': None,
-                'query': graphql.update_tag_group,
-                'variables': {'id': tag_group['id'],
-                              'patches': tag_group_patches(tag_group)}}
-        r = self.http.post(self.graphql_url, json=body)
-        r.raise_for_status()
-        r_body = r.json()
-        errors = r_body['errors']
-        if errors:
-            print(errors)
-            print('Request: ', body)
-            raise Exception()
+        self._exec_graphql(graphql.update_tag_group, {'id': tag_group['id'], 'patches': tag_group_patches(tag_group)})
 
     def _delete_tag_group(self, tag_group):
-        body = {'operationName': None,
-                'query': graphql.delete_tag_group,
-                'variables': {'id': tag_group['id']}}
-        r = self.http.post(self.graphql_url, json=body)
-        r.raise_for_status()
-        r_body = r.json()
-        errors = r_body['errors']
-        if errors:
-            print(errors)
-            print('Request: ', body)
-            raise Exception()
+        self._exec_graphql(graphql.delete_tag_group, {'id': tag_group['id']})
 
     def _restore_tags(self, tag_group_id, desired_tags, current_tags):
         for desired_tag in desired_tags:
@@ -154,18 +134,8 @@ class TagGroupsRestoreAction(TagGroupsBase, RestoreAction):
                 self._delete_tag(current_tag)
 
     def _create_tag(self, tag):
-        body = {'operationName': None,
-                'query': graphql.create_tag,
-                'variables': tag}
-        r = self.http.post(self.graphql_url, json=body)
-        r.raise_for_status()
-        r_body = r.json()
-        errors = r_body['errors']
-        if errors:
-            print(errors)
-            print('Request: ', body)
-            raise Exception()
-        tag['id'] = r_body['data']['createTag']['id']
+        response = self._exec_graphql(graphql.create_tag, tag)
+        tag['id'] = response['createTag']['id']
 
     def _update_tag(self, tag):
         def tag_patches(t):
@@ -177,28 +147,7 @@ class TagGroupsRestoreAction(TagGroupsBase, RestoreAction):
                 {'op': 'replace', 'path': '/status', 'value': t['status']}
             ]
 
-        body = {'operationName': None,
-                'query': graphql.update_tag,
-                'variables': {'id': tag['id'],
-                              'patches': tag_patches(tag)}}
-        r = self.http.post(self.graphql_url, json=body)
-        r.raise_for_status()
-        r_body = r.json()
-        errors = r_body['errors']
-        if errors:
-            print(errors)
-            print('Request: ', body)
-            raise Exception()
+        self._exec_graphql(graphql.update_tag, {'id': tag['id'], 'patches': tag_patches(tag)})
 
     def _delete_tag(self, tag):
-        body = {'operationName': None,
-                'query': graphql.delete_tag,
-                'variables': {'id': tag['id']}}
-        r = self.http.post(self.graphql_url, json=body)
-        r.raise_for_status()
-        r_body = r.json()
-        errors = r_body['errors']
-        if errors:
-            print(errors)
-            print('Request: ', body)
-            raise Exception()
+        self._exec_graphql(graphql.delete_tag, {'id': tag['id']})
