@@ -1,7 +1,7 @@
 # leanix-admin
 
 `leanix-admin` is a command line tool that can be used to backup and restore
-  model files from [LeanIX](https://www.leanix.net).
+  model files, tag groups and tags from [LeanIX](https://www.leanix.net).
 Please note that it is only compatible with LeanIX 4.0 “Pathfinder”.
 
 ## CLI
@@ -18,13 +18,23 @@ to generate an API token. You will be asked for it in the next steps.
     
 ### Usage
 
-Download the current model versions from LeanIX and store them on disk (in the current directory):  
+Download the current model versions and tags from LeanIX and store them on disk (in the current directory):  
 
     leanix-admin backup
     
 Make the desired changes to the json files and upload them again:
 
     leanix-admin restore
+
+### Command-line options
+
+	leanix-admin --log-level DEBUG backup --mtm-base-url https://svc.leanix.net/services/mtm/v1 --api-token XXX --api-base-url https://bosch.leanix.net/beta/api/v1
+
+
+* `log-level`: DEBUG, INFO, WARNING, ERROR, CRITICAL, see [Python Logging](https://docs.python.org/2/howto/logging.html)
+* `api-token`: LeanIX API Token, see ["Authentication" documentation](https://dev.leanix.net/v4.0/docs/authentication#section-generate-api-tokens)
+* `mtm-base-url`: URL to MTM Service which allows to retrieve a valid access token from the API token
+* `api-base-url`: URL to LeanIX Pathfinder API
 
 
 ## License

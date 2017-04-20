@@ -1,9 +1,7 @@
-import base64
-import json
-
+import jwt
 import requests
 import requests.auth as requests_auth
-
+import logging
 import leanix_admin.action as action
 
 
@@ -44,12 +42,9 @@ class WorkspaceLogger(action.Action):
         print('Logged in to workspace:', workspace_name)
 
     def _parse_jwt_payload(self):
-        jwt = self.http.auth.obtain_access_token()
-        payload_part = jwt.split('.')[1]
-        # fix missing padding for this base64 encoded string.
-        # If number of bytes is not dividable by 4, append '=' until it is.
-        missing_padding = len(payload_part) % 4
-        if missing_padding != 0:
-            payload_part += '=' * (4 - missing_padding)
-        payload = json.loads(base64.b64decode(payload_part))
+        token = self.http.auth.obtain_access_token()
+        logging.debug("JWT Token = %s", token)
+        payload = jwt.decode(token, verify=False)
+        logging.debug("Access Token = %s", payload)
+
         return payload
