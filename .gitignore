@@ -98,3 +98,4 @@ ENV/
 
 # model files
 *-model.json
+tag-groups.json

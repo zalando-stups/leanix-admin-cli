@@ -1,4 +1,4 @@
-FROM python:alpine
+FROM python:3.6.1-alpine
 RUN mkdir -p /opt/leanix_admin
 RUN mkdir -p /opt/models/
 COPY . /opt/leanix_admin
