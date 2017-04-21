@@ -31,7 +31,7 @@ Make the desired changes to the json files and upload them again:
 ### Options & Environment Variables
 
 	leanix-admin --log-level DEBUG backup \
-	   --mtm-base-url https://demo-svc.leanix.net/services/mtm/v1 \
+	   --mtm-base-url https://demo.leanix.net/services/mtm/v1 \
 	   --api-token $LX_API_TOKEN \
 	   --api-base-url https://demo.leanix.net/beta/api/v1
 
@@ -53,7 +53,7 @@ Run the leanix-admin-cli in a container:
 	docker run --rm --name leanix-admin-cli -v $(pwd):/opt/models/ \
 	 -e LX_API_TOKEN=$LX_API_TOKEN \
 	 -e LX_API_BASE_URL=https://demo.leanix.net/beta/api/v1 \
-	 -e LX_MTM_BASE_URL=https://demo-svc.leanix.net/services/mtm/v1 \
+	 -e LX_MTM_BASE_URL=https://demo.leanix.net/services/mtm/v1 \
 	 -ti leanix-admin-cli backup
 
 Run the leanix-admin-cli in a container against your **local leanix development**:
@@ -61,9 +61,8 @@ Run the leanix-admin-cli in a container against your **local leanix development*
 	docker run --rm --name leanix-admin-cli -v $(pwd):/opt/models/ \
 	 -e LX_API_TOKEN=XXX \
 	 -e LX_API_BASE_URL=https://local-eam.leanix.net/beta/api/v1 \
-	 -e LX_MTM_BASE_URL=https://local-svc.leanix.net/services/mtm/v1 \
+	 -e LX_MTM_BASE_URL=https://local-eam.leanix.net/services/mtm/v1 \
 	 --add-host local-eam.leanix.net:$(docker-machine ip) \
-	 --add-host local-svc.leanix.net:$(docker-machine ip) \
 	 -ti leanix-admin-cli backup
 
 For ease of use, you can add a function to your bash (or zsh) environment by adding the following function to you `~/.bashrc` (`~/.zshrc`)
@@ -73,7 +72,7 @@ leanix-admin-cli-local() {
 	docker run --rm --name leanix-admin-cli -v $(pwd):/opt/models/ \
 	 -e LX_API_TOKEN=$LX_API_TOKEN \
 	 -e LX_API_BASE_URL=https://demo.leanix.net/beta/api/v1 \
-	 -e LX_MTM_BASE_URL=https://demo-svc.leanix.net/services/mtm/v1 \
+	 -e LX_MTM_BASE_URL=https://demo.leanix.net/services/mtm/v1 \
 	 -ti leanix-admin-cli backup
 }
 ```
