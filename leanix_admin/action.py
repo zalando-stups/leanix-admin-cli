@@ -6,7 +6,7 @@ class Action:
         pass
 
 
-class ConfirmableAction:
+class ConfirmableAction(Action):
     def __init__(self, action, name):
         super().__init__()
         self.action = action

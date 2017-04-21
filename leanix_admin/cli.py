@@ -1,9 +1,8 @@
 import click
-import requests
 import logging
-import leanix_admin.auth as auth
-import leanix_admin.model as model
-import leanix_admin.tag_group as tag_group
+import requests
+
+from leanix_admin import auth, model, tag_group
 
 models = {
     'data-model': '/models/dataModel',

@@ -1,8 +1,8 @@
-import leanix_admin.action as action
-import leanix_admin.file as file
+from leanix_admin import file
+from leanix_admin.action import BackupAction, RestoreAction
 
 
-class ModelBackupAction(action.BackupAction):
+class ModelBackupAction(BackupAction):
     def __init__(self, http, url, name):
         super().__init__(name)
         self.http = http
@@ -19,7 +19,7 @@ class ModelBackupAction(action.BackupAction):
         file.write_to_disk(self.name, model_data)
 
 
-class ModelRestoreAction(action.RestoreAction):
+class ModelRestoreAction(RestoreAction):
     def __init__(self, http, url, name, force):
         super().__init__(name)
         self.http = http

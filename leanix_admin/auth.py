@@ -2,7 +2,7 @@ import jwt
 import requests
 import requests.auth as requests_auth
 import logging
-import leanix_admin.action as action
+from leanix_admin import action
 
 
 class LeanixAuth(requests_auth.AuthBase):

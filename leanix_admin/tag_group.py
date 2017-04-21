@@ -1,7 +1,6 @@
 import json
 
-import leanix_admin.file as file
-import leanix_admin.graphql as graphql
+from leanix_admin import graphql, file
 from leanix_admin.action import BackupAction, RestoreAction
 
 
