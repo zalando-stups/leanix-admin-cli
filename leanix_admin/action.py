@@ -20,6 +20,10 @@ class ConfirmableAction(Action):
             print('skipped.')
 
     def do_perform(self):
+        """
+        Will be called, if the user confirmed the action.
+        Should be overwritten by subclasses to contain the actual logic.
+        """
         pass
 
 

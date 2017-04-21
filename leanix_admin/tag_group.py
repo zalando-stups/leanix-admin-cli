@@ -17,6 +17,11 @@ class TagGroupsBase:
         self.graphql_url = graphql_url
 
     def _fetch_tag_groups(self, erase_id=True):
+        """
+        Loads tag groups and tags via GraphQL and unwrap them from
+        their edges/node structure. By default it strips the ids from the returned objects.
+        This behavior can be changed by setting `erase_id=False`.
+        """
         response = self._exec_graphql(graphql.list_tag_groups)
         tag_groups = []
         for tag_group_edge in response.get('listTagGroups', {}).get('edges', []):
@@ -63,6 +68,9 @@ class TagGroupsBackupAction(TagGroupsBase, BackupAction):
         self.graphql_url = graphql_url
 
     def do_perform(self):
+        """
+        Fetches tag groups including their tags and saves them to disk.
+        """
         tag_groups = self._fetch_tag_groups()
         file.write_to_disk(self.name, tag_groups)
 
@@ -75,6 +83,10 @@ class TagGroupsRestoreAction(TagGroupsBase, RestoreAction):
         self.graphql_url = graphql_url
 
     def do_perform(self):
+        """
+        Loads the desired tag groups from disk and updates the remote ones accordingly:
+        Obsolete groups are removed, new ones are added and existing ones are updated.
+        """
         current_tag_groups = self._fetch_tag_groups(erase_id=False)
         desired_tag_groups = file.read_from_disk(self.name)
 
