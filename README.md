@@ -26,6 +26,23 @@ Make the desired changes to the json files and upload them again:
 
     leanix-admin restore
 
+#### Docker image
+
+Build the docker image running: `docker build -t leanix-admin-cli .`
+
+Run the leanix-admin-cli in a container:
+`docker run --rm --name leanix-admin-cli -v $(pwd):/opt/models/ -e LX_API_TOKEN=$LX_API_TOKEN_LOCAL -ti --add-host local-eam.leanix.net:$(docker-machine ip) --add-host local-svc.leanix.net:$(docker-machine ip) leanix-admin-cli backup`
+
+The **api token** can either be set via the env var `LX_API_TOKEN_LOCAL`.
+
+For ease of use, you can add a function to your bash (or zsh) environment by adding the following function to you `~/.bashrc` (`~/.zshrc`)
+
+```bash
+leanix-admin-cli-local() {
+    docker run --rm --name leanix-admin-cli -v $(pwd):/opt/models/ -e LX_API_TOKEN=$LX_API_TOKEN_LOCAL -ti --add-host local-eam.leanix.net:$(docker-machine ip) --add-host local-svc.leanix.net:$(docker-machine ip) leanix-admin-cli $1
+}
+```
+
 
 ## License
 
