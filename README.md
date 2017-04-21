@@ -28,7 +28,7 @@ Make the desired changes to the json files and upload them again:
 
 #### Docker image
 
-Build the docker image running: `docker build -t leanix-admin-cli`
+Build the docker image running: `docker build -t leanix-admin-cli .`
 
 Run the leanix-admin-cli in a container:
 `docker run --rm --name leanix-admin-cli -v $(pwd):/opt/models/ -e LX_API_TOKEN=$LX_API_TOKEN_LOCAL -ti --add-host local-eam.leanix.net:$(docker-machine ip) --add-host local-svc.leanix.net:$(docker-machine ip) leanix-admin-cli backup`
