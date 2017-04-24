@@ -1,117 +1,43 @@
-import base64
-import json
-import os
-
 import click
+import logging
 import requests
-import requests.auth
 
+from leanix_admin import auth, model, tag_group
 
-def obtain_access_token(api_token, mtm_base_url):
-    response = requests.post(mtm_base_url + '/oauth2/token',
-                             data={'grant_type': 'client_credentials'},
-                             auth=('apitoken', api_token))
-    response.raise_for_status()
-    return response.json()['access_token']
-
-
-class LeanixAuth(requests.auth.AuthBase):
-    def __init__(self, api_token, oauth_token_url):
-        self.oauth_token_url = oauth_token_url
-        self.api_token = api_token
-        self.access_token = None
-
-    def obtain_access_token(self):
-        if not self.access_token:
-            response = requests.post(self.oauth_token_url,
-                                     data={'grant_type': 'client_credentials'},
-                                     auth=('apitoken', self.api_token))
-            response.raise_for_status()
-            self.access_token = response.json()['access_token']
-        return self.access_token
-
-    def auth_header(self):
-        return 'Bearer ' + self.obtain_access_token()
-
-    def __call__(self, r):
-        r.headers['Authorization'] = self.auth_header()
-        return r
+models = {
+    'data-model': '/models/dataModel',
+    'view-model': '/models/viewModel',
+    'auth-model': '/models/authorization',
+    'lang-en-model': '/models/languages/en'
+}
 
 
 class LeanixAdmin:
-    models = {
-        'data-model': '/models/dataModel',
-        'view-model': '/models/viewModel',
-        'auth-model': '/models/authorization',
-        'lang-en-model': '/models/languages/en'
-    }
+    def __init__(self, api_token, mtm_base_url, api_base_url, force=False):
+        http = requests.session()
+        http.auth = auth.LeanixAuth(api_token, mtm_base_url + '/oauth2/token')
+        graphql_url = api_base_url + '/graphql'
+        workspace_logger = auth.WorkspaceLogger(http, mtm_base_url)
 
-    def __init__(self, api_token, mtm_base_url, admin_base_url):
-        self.mtm_base_url = mtm_base_url
-        self.admin_base_url = admin_base_url
-        self.auth = LeanixAuth(api_token, mtm_base_url + '/oauth2/token')
-        self.http = requests.session()
-        self.http.auth = self.auth
+        self.restore_actions = []
+        self.restore_actions.append(workspace_logger)
+        for name, api_path in models.items():
+            self.restore_actions.append(model.ModelRestoreAction(http, api_base_url + api_path, name, force))
+        self.restore_actions.append(tag_group.TagGroupsRestoreAction(http, graphql_url))
+
+        self.backup_actions = []
+        self.backup_actions.append(workspace_logger)
+        for name, api_path in models.items():
+            self.backup_actions.append(model.ModelBackupAction(http, api_base_url + api_path, name))
+        self.backup_actions.append(tag_group.TagGroupsBackupAction(http, graphql_url))
+
+    def restore(self):
+        for action in self.restore_actions:
+            action.perform()
 
     def backup(self):
-        self._print_workspace()
-        if click.confirm('Continue downloading backups?', default=True):
-            for name, api_path in self.models.items():
-                print('Backing up {}...'.format(name))
-                self._download_model(name, api_path)
-
-    def restore(self, force):
-        self._print_workspace()
-        if click.confirm('Continue restoring backups?', default=True):
-            for name, api_path in self.models.items():
-                print('Restoring {}...'.format(name))
-                self._upload_model(name, api_path, force)
-
-    def _print_workspace(self):
-        jwt = self.auth.obtain_access_token()
-        payload_part = jwt.split('.')[1]
-        # fix missing padding for this base64 encoded string.
-        # If number of bytes is not dividable by 4, append '=' until it is.
-        missing_padding = len(payload_part) % 4
-        if missing_padding != 0:
-            payload_part += '='* (4 - missing_padding)
-        payload = json.loads(base64.b64decode(payload_part))
-        workspace_id = payload['principal']['permission']['workspaceId']
-        response = self.http.get(self.mtm_base_url + '/workspaces/' + workspace_id)
-        response.raise_for_status()
-        workspace_name = response.json()['data']['name']
-        print('Logged in to workspace:', workspace_name)
-
-    def _upload_model(self, name, api_path, force):
-        file_name = './' + name + '.json'
-        with open(file_name, 'r') as f:
-            data_model = json.load(f)
-        url = self.admin_base_url + api_path
-        if force:
-            url += "?force=true"
-        response = self.http.put(url, json=data_model)
-        try:
-            response.raise_for_status()
-        except:
-            try:
-                print(response.json())
-            except:
-                pass
-            raise
-
-    def _download_model(self, name, api_path):
-        response = self.http.get(self.admin_base_url + api_path)
-        try:
-            response.raise_for_status()
-        except:
-            print(response.json())
-            raise
-        model_data = response.json()['data']
-
-        file_name = './' + name + '.json'
-        os.makedirs(os.path.dirname(file_name), exist_ok=True)
-        with open(file_name, 'w') as f:
-            json.dump(model_data, f, indent=4)
+        for action in self.backup_actions:
+            action.perform()
 
 
 api_token_option = click.option('--api-token', envvar='LX_API_TOKEN', prompt=True, hide_input=True,
@@ -119,35 +45,42 @@ api_token_option = click.option('--api-token', envvar='LX_API_TOKEN', prompt=Tru
                                      'See http://dev.leanix.net/v4.0/docs/authentication#section-generate-api-tokens')
 mtm_base_url_option = click.option('--mtm-base-url', envvar='LX_MTM_BASE_URL',
                                    default='https://demo.leanix.net/services/mtm/v1')
-admin_base_url_option = click.option('--admin-base-url', envvar='LX_ADMIN_BASE_URL',
+api_base_url_option = click.option('--api-base-url', envvar='LX_API_BASE_URL',
                                      default='https://demo.leanix.net/beta/api/v1')
+log_level_option = click.option('--log-level', envvar='LOG_LEVEL', default='WARNING')
 
 @click.group()
-def cli():
+@log_level_option
+def cli(log_level):
+    numeric_level = getattr(logging, log_level.upper(), None)
+    if not isinstance(numeric_level, int):
+        raise ValueError('Invalid log level: %s' % log_level)
+    logging.basicConfig(level=numeric_level)
     pass
 
 
 @cli.command()
 @api_token_option
 @mtm_base_url_option
-@admin_base_url_option
-def backup(api_token, mtm_base_url, admin_base_url):
+@api_base_url_option
+def backup(api_token, mtm_base_url, api_base_url):
     admin = LeanixAdmin(api_token=api_token,
                         mtm_base_url=mtm_base_url,
-                        admin_base_url=admin_base_url)
+                        api_base_url=api_base_url)
     admin.backup()
 
 
 @cli.command()
 @api_token_option
 @mtm_base_url_option
-@admin_base_url_option
+@api_base_url_option
 @click.option('--force/--no-force', default=False)
-def restore(api_token, mtm_base_url, admin_base_url, force):
+def restore(api_token, mtm_base_url, api_base_url, force):
     admin = LeanixAdmin(api_token=api_token,
                         mtm_base_url=mtm_base_url,
-                        admin_base_url=admin_base_url)
-    admin.restore(force)
+                        api_base_url=api_base_url,
+                        force=force)
+    admin.restore()
 
 
 def main():

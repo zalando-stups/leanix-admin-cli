@@ -96,3 +96,6 @@ ENV/
 # Rope project settings
 .ropeproject
 
+# model files
+*-model.json
+tag-groups.json
