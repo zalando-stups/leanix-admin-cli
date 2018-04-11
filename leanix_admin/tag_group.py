@@ -3,6 +3,11 @@ import json
 from leanix_admin import graphql, file
 from leanix_admin.action import BackupAction, RestoreAction
 
+OTHER_TAGS = {'id': None, 'name': '__OTHER_TAGS__'}
+
+
+def is_real_tag_group(tag_group):
+    return tag_group['name'] != OTHER_TAGS['name']
 
 def find_by_name(needle, haystack):
     for current in haystack:
@@ -22,22 +27,27 @@ class TagGroupsBase:
         their edges/node structure. By default it strips the ids from the returned objects.
         This behavior can be changed by setting `erase_id=False`.
         """
-        response = self._exec_graphql(graphql.list_tag_groups)
-        tag_groups = []
-        for tag_group_edge in response.get('listTagGroups', {}).get('edges', []):
-            tag_group = tag_group_edge['node']
-            tags = []
-            for tag_edge in tag_group.get('tags', {}).get('edges', []):
-                tag = tag_edge['node']
-                if erase_id:
-                    del tag['id']
-                tags.append(tag)
+        tag_group_lookup = {}
+        by_name = lambda x: x['name']
+        response = self._exec_graphql(graphql.list_tags)
+        for tag_edge in response.get('listTags', {}).get('edges', []):
+            tag = tag_edge['node']
+            tag_group = tag['tagGroup'] or OTHER_TAGS.copy()
 
-            tag_group['tags'] = tags
             if erase_id:
+                del tag['id']
                 del tag_group['id']
-            tag_groups.append(tag_group)
-        return tag_groups
+
+            del tag['tagGroup']
+
+            group_name = tag_group['name']
+            known_group = tag_group_lookup.get(group_name, {'tags': []})
+            known_tags = known_group['tags']
+            known_tags.append(tag)
+            tag_group['tags'] = sorted(known_tags, key=by_name)
+            tag_group_lookup[group_name] = tag_group
+
+        return sorted(tag_group_lookup.values(), key=by_name)
 
     def _exec_graphql(self, query, variables=None):
         if variables is None:
@@ -94,10 +104,14 @@ class TagGroupsRestoreAction(TagGroupsBase, RestoreAction):
             current_tag_group = find_by_name(desired_tag_group, current_tag_groups)
             if current_tag_group:
                 desired_tag_group['id'] = current_tag_group['id']
-                self._update_tag_group(desired_tag_group)
+                if is_real_tag_group(desired_tag_group):
+                    self._update_tag_group(desired_tag_group)
                 current_tags = current_tag_group.get('tags', [])
             else:
-                self._create_tag_group(desired_tag_group)
+                if is_real_tag_group(desired_tag_group):
+                    self._create_tag_group(desired_tag_group)
+                else:
+                    desired_tag_group['id'] = None
                 current_tags = []
             self._restore_tags(desired_tag_group['id'], desired_tag_group.get('tags', []), current_tags)
 
@@ -105,7 +119,8 @@ class TagGroupsRestoreAction(TagGroupsBase, RestoreAction):
             if not find_by_name(current_tag_group, desired_tag_groups):
                 for tag in current_tag_group.get('tags', []):
                     self._delete_tag(tag)
-                self._delete_tag_group(current_tag_group)
+                if is_real_tag_group(current_tag_group):
+                    self._delete_tag_group(current_tag_group)
 
     def _create_tag_group(self, tag_group):
         response = self._exec_graphql(graphql.create_tag_group, tag_group)
