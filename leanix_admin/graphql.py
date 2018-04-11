@@ -1,24 +1,20 @@
-list_tag_groups = '''
+list_tags = '''
 query {
-  listTagGroups: allTagGroups {
+  listTags: allTags {
     edges {
       node {
         id
         name
-        shortName
         description
-        mode
-        restrictToFactSheetTypes
-        tags {
-          edges {
-            node {
-              id
-              name
-              description
-              color
-              status
-            }
-          }
+        color
+        status
+        tagGroup {
+          id
+          name
+          shortName
+          description
+          mode
+          restrictToFactSheetTypes
         }
       }
     }
@@ -64,7 +60,7 @@ create_tag = '''
 mutation ($name: String!,
           $description: String,
           $color: String!,
-          $tagGroupId: ID!) {
+          $tagGroupId: ID) {
   createTag(name: $name,
             description: $description,
             color: $color,
