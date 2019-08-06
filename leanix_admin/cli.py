@@ -8,7 +8,8 @@ models = {
     'data-model': '/models/dataModel',
     'view-model': '/models/viewModel',
     'auth-model': '/models/authorization',
-    'lang-en-model': '/models/languages/en'
+    'lang-en-model': '/models/languages/en',
+    'reporting': '/models/reporting'
 }
 
 
