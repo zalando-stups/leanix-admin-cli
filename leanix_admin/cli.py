@@ -9,7 +9,7 @@ models = {
     'view-model': '/models/viewModel',
     'auth-model': '/models/authorization',
     'lang-en-model': '/models/languages/en',
-    'reporting': '/models/reporting'
+    'reporting-model': '/models/reportingModel'
 }
 
 
